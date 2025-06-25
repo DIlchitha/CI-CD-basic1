@@ -1,0 +1,75 @@
+pipeline {
+    agent any
+
+    tools {
+        nodejs 'node21'
+    }
+
+    environment {
+        SCANNER_HOME = tool 'sonar-scanner'
+    }
+
+    stages {
+        stage('Git checkout') {
+            steps {
+                git credentialsId: 'git-cred', url: 'https://github.com/DIlchitha/CI-CD-basic1.git'
+            }
+        }
+
+        stage('Install Package dependency') {
+            steps {
+                sh 'npm install'
+            }
+        }
+
+        stage('Trivy FS scan') {
+            steps {
+                sh 'trivy fs --format table -o fs-report.html .'
+            }
+        }
+
+        stage('SonarQube') {
+            steps {
+                withSonarQubeEnv('sonar') {
+                    sh '$SCANNER_HOME/bin/sonar-scanner -Dsonar.projectKey=Campground -Dsonar.projectName=Campground'
+                }
+            }
+        }
+
+        stage('Docker build') {
+            steps {
+                script {
+                    withDockerRegistry(credentialsId: 'docker-cred', toolName: 'docker') {
+                        sh 'docker build -t Dilchitha1111/camp:latest .'
+                    }
+                }
+            }
+        }
+
+        stage('Trivy image scan') {
+            steps {
+                sh 'trivy image --format table -o image-report.html Dilchitha1111/camp:latest'
+            }
+        }
+
+        stage('Docker push image') {
+            steps {
+                script {
+                    withDockerRegistry(credentialsId: 'docker-cred', toolName: 'docker') {
+                        sh 'docker push Dilchitha1111/camp:latest'
+                    }
+                }
+            }
+        }
+
+        stage('Docker Deploy') {
+            steps {
+                script {
+                    withDockerRegistry(credentialsId: 'docker-cred', toolName: 'docker') {
+                        sh 'docker run -d -p 3000:3000 Dilchitha1111/camp:latest'
+                    }
+                }
+            }
+        }
+    }
+}
